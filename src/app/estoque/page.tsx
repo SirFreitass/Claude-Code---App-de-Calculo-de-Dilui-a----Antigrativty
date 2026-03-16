@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Warehouse,
   AlertTriangle,
@@ -14,6 +14,8 @@ import {
 import { clsx } from "clsx";
 import { useApp } from "@/contexts/AppContext";
 import { getStatusEstoque, type StatusEstoque } from "@/types";
+import { EntradaEstoqueModal } from "@/components/estoque/EntradaEstoqueModal";
+import { SaidaEstoqueModal } from "@/components/estoque/SaidaEstoqueModal";
 
 // ─────────────────────────────────────────────
 // Config de status (reutilizável)
@@ -32,6 +34,9 @@ const STATUS_CFG: Record<StatusEstoque, { label: string; cls: string; dot: strin
 
 export default function EstoquePage() {
   const { produtos, estoques, movimentacoes } = useApp();
+  
+  const [modalEntradaId, setModalEntradaId] = useState<string | null>(null);
+  const [modalSaidaId, setModalSaidaId] = useState<string | null>(null);
 
   // ── Lista enriquecida de estoque ──
   const listaEstoque = useMemo(() => {
@@ -42,20 +47,12 @@ export default function EstoquePage() {
         const status = getStatusEstoque(e);
         return { ...e, produto, status };
       })
-      .filter(Boolean)
+      .filter((e): e is NonNullable<typeof e> => e !== null)
       .sort((a, b) => {
         // Ordenar por gravidade: zerado > critico > baixo > ok
         const ordem: Record<StatusEstoque, number> = { zerado: 0, critico: 1, baixo: 2, ok: 3 };
-        return ordem[a!.status] - ordem[b!.status];
-      }) as Array<{
-        id: string;
-        produtoId: string;
-        quantidadeAtual: number;
-        alertaEstoqueMinimo: number;
-        localizacao?: string;
-        produto: (typeof produtos)[0];
-        status: StatusEstoque;
-      }>;
+        return ordem[a.status] - ordem[b.status];
+      });
   }, [estoques, produtos]);
 
   // ── Resumo cards ──
@@ -189,8 +186,26 @@ export default function EstoquePage() {
                       </div>
                     </div>
 
+                    {/* Botões de Ação Avulsa */}
+                    <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-4">
+                      <button
+                        onClick={() => setModalEntradaId(item.produtoId)}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold bg-white border border-gray-200 text-gray-700 rounded-lg hover:border-emerald-400 hover:text-emerald-700 hover:bg-emerald-50 transition"
+                      >
+                        <ArrowUpCircle className="w-4 h-4" />
+                        Dar Entrada
+                      </button>
+                      <button
+                        onClick={() => setModalSaidaId(item.produtoId)}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold bg-white border border-gray-200 text-gray-700 rounded-lg hover:border-red-400 hover:text-red-700 hover:bg-red-50 transition"
+                      >
+                        <ArrowDownCircle className="w-4 h-4" />
+                        Registrar Saída
+                      </button>
+                    </div>
+
                     {/* Barra de progresso vs mínimo */}
-                    <div className="mt-3">
+                    <div className="mt-4">
                       <div className="flex items-center justify-between text-[11px] text-gray-400 mb-1">
                         <span>Mín: {item.alertaEstoqueMinimo} {item.produto.unidade}</span>
                         <span>
@@ -295,6 +310,19 @@ export default function EstoquePage() {
           </div>
         </div>
       </div>
+
+      {/* ── Modais ── */}
+      <EntradaEstoqueModal 
+        produtoId={modalEntradaId}
+        open={!!modalEntradaId}
+        onClose={() => setModalEntradaId(null)}
+      />
+      
+      <SaidaEstoqueModal 
+        produtoId={modalSaidaId}
+        open={!!modalSaidaId}
+        onClose={() => setModalSaidaId(null)}
+      />
     </div>
   );
 }

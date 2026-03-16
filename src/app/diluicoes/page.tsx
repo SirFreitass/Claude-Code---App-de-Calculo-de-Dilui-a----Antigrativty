@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   FlaskConical,
   Droplets,
@@ -21,7 +22,6 @@ import {
   precoMedioPonderado,
   custoLitroDiluido,
   rendimentoPorLitro,
-  getStatusEstoque,
   type TipoDiluicao,
 } from "@/types";
 
@@ -81,13 +81,23 @@ const VOLUME_PRESETS = [5, 10, 20, 50];
 // Componente principal
 // ─────────────────────────────────────────────
 
-export default function DiluicoesPage() {
-  const { produtos, diluicoes, compras, estoques, registrarSaida } = useApp();
+function DiluicoesCalculator() {
+  const { produtos, diluicoes, compras } = useApp();
 
   const [produtoId, setProdutoId] = useState<string>("");
   const [nivel, setNivel] = useState<TipoDiluicao | "">("");
   const [volumeStr, setVolumeStr] = useState<string>("");
-  const [retiradaFeita, setRetiradaFeita] = useState(false);
+
+  const searchParams = useSearchParams();
+  const queryId = searchParams.get("id");
+
+  // ── Auto-Select via QR Code / URL ──
+  useEffect(() => {
+    if (queryId && !produtoId) {
+      const existe = produtos.some((p) => p.id === queryId);
+      if (existe) setProdutoId(queryId);
+    }
+  }, [queryId, produtos, produtoId]);
 
   // ── Produto selecionado ──
   const produtoSelecionado = useMemo(
@@ -123,9 +133,16 @@ export default function DiluicoesPage() {
     const fator = dilAtiva.fatorDiluicao;
     const totalPartes = 1 + fator; // 1 parte conc + fator partes água
 
-    const concentradoLitros = volume / totalPartes;
-    const concentradoMl = concentradoLitros * 1000;
-    const aguaLitros = volume - concentradoLitros;
+    // Trabalhar em ml para arredondamentos seguros
+    const volumeMl = volume * 1000;
+    
+    const concentradoMlExact = volumeMl / totalPartes;
+    // Arredonda o concentrado e acha a água por subtração
+    const concentradoMl = Math.round(concentradoMlExact);
+    const aguaMl = Math.round(volumeMl) - concentradoMl;
+
+    const concentradoLitros = concentradoMl / 1000;
+    const aguaLitros = aguaMl / 1000;
 
     const custoPreparacao =
       precoMedio !== null ? concentradoLitros * precoMedio : null;
@@ -139,68 +156,41 @@ export default function DiluicoesPage() {
       concentradoMl,
       concentradoLitros,
       aguaLitros,
+      aguaMl,
       custoPreparacao,
       custoLitro,
       rendimento,
     };
   }, [dilAtiva, volume, precoMedio]);
 
-  // ── Estoque do produto selecionado ──
-  const estoqueProduto = useMemo(
-    () => (produtoId ? estoques.find((e) => e.produtoId === produtoId) ?? null : null),
-    [estoques, produtoId]
-  );
-
-  const estoqueInsuficiente = resultado && estoqueProduto
-    ? estoqueProduto.quantidadeAtual < resultado.concentradoLitros
-    : false;
+  // -- Calculadora de Consulta Apenas --
 
   // ── Handlers ──
   function handleSelectProduto(id: string) {
     setProdutoId(id);
     setNivel("");
     setVolumeStr("");
-    setRetiradaFeita(false);
   }
 
   function handleReset() {
     setProdutoId("");
     setNivel("");
     setVolumeStr("");
-    setRetiradaFeita(false);
   }
 
-  const handleRegistrarRetirada = useCallback(() => {
-    if (!resultado || !dilAtiva || !produtoSelecionado || retiradaFeita) return;
 
-    const unidade = produtoSelecionado.unidade;
-    const qtdDisplay = resultado.concentradoMl < 1000
-      ? `${resultado.concentradoMl.toFixed(0)}ml`
-      : `${resultado.concentradoLitros.toFixed(2)}${unidade}`;
-
-    registrarSaida({
-      produtoId: produtoSelecionado.id,
-      quantidade: resultado.concentradoLitros,
-      motivo: `Diluição ${dilAtiva.tipo} ${dilAtiva.proporcao} — ${volume}L solução (${qtdDisplay} concentrado)`,
-      responsavel: "Operador",
-    });
-
-    setRetiradaFeita(true);
-  }, [resultado, dilAtiva, produtoSelecionado, volume, retiradaFeita, registrarSaida]);
 
   // Quando trocar o nível, verificar se existe diluição para ele
   function handleSelectNivel(tipo: TipoDiluicao) {
     const existe = dilsDisponiveis.some((d) => d.tipo === tipo);
     if (existe) {
       setNivel(tipo);
-      setRetiradaFeita(false);
     }
   }
 
-  // Quando o volume muda, reset do estado de retirada
+  // Quando o volume muda
   function handleVolumeChange(val: string) {
     setVolumeStr(val);
-    setRetiradaFeita(false);
   }
 
   // ── Quantos passos já concluídos (p/ progress indicator) ──
@@ -507,12 +497,12 @@ export default function DiluicoesPage() {
               <div className="flex flex-col items-center justify-center p-5 sm:p-6 bg-gray-900/50">
                 <FlaskConical className="w-6 h-6 text-brand-400 mb-2" />
                 <p className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-                  {resultado.concentradoMl < 1000
+                  {resultado.concentradoLitros < 1
                     ? `${resultado.concentradoMl.toFixed(0)}`
-                    : `${resultado.concentradoLitros.toFixed(2)}`}
+                    : `${resultado.concentradoLitros.toFixed(3)}`}
                 </p>
                 <p className="text-sm font-medium text-gray-400 mt-1">
-                  {resultado.concentradoMl < 1000 ? "ml" : "litros"} de
+                  {resultado.concentradoLitros < 1 ? "ml" : "litros"} de
                   concentrado
                 </p>
               </div>
@@ -521,10 +511,12 @@ export default function DiluicoesPage() {
               <div className="flex flex-col items-center justify-center p-5 sm:p-6 bg-gray-900/50">
                 <Droplets className="w-6 h-6 text-blue-400 mb-2" />
                 <p className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-                  {resultado.aguaLitros.toFixed(2)}
+                  {resultado.aguaLitros < 1 
+                    ? `${resultado.aguaMl.toFixed(0)}` 
+                    : `${resultado.aguaLitros.toFixed(3)}`}
                 </p>
                 <p className="text-sm font-medium text-gray-400 mt-1">
-                  litros de água
+                  {resultado.aguaLitros < 1 ? "ml de água" : "litros de água"}
                 </p>
               </div>
             </div>
@@ -613,89 +605,7 @@ export default function DiluicoesPage() {
             </div>
           </div>
 
-          {/* ── Retirada de Estoque ── */}
-          <div className="mt-3 bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
-            {/* Info de estoque atual */}
-            {estoqueProduto && (
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Warehouse className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-600">
-                    Estoque atual:{" "}
-                    <span className={clsx(
-                      "font-bold",
-                      getStatusEstoque(estoqueProduto) === "ok" && "text-gray-900",
-                      getStatusEstoque(estoqueProduto) === "baixo" && "text-amber-600",
-                      getStatusEstoque(estoqueProduto) === "critico" && "text-orange-600",
-                      getStatusEstoque(estoqueProduto) === "zerado" && "text-red-600",
-                    )}>
-                      {estoqueProduto.quantidadeAtual} {produtoSelecionado?.unidade}
-                    </span>
-                  </span>
-                </div>
-                {resultado && (
-                  <span className="text-xs text-gray-400">
-                    Precisa de {resultado.concentradoMl < 1000
-                      ? `${resultado.concentradoMl.toFixed(0)}ml`
-                      : `${resultado.concentradoLitros.toFixed(2)}L`}
-                  </span>
-                )}
-              </div>
-            )}
 
-            {/* Alerta de estoque insuficiente */}
-            {estoqueInsuficiente && (
-              <div className="flex items-center gap-2 mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-                <p className="text-xs text-red-700">
-                  <span className="font-semibold">Estoque insuficiente.</span>{" "}
-                  Faltam {((resultado?.concentradoLitros ?? 0) - (estoqueProduto?.quantidadeAtual ?? 0)).toFixed(2)}{" "}
-                  {produtoSelecionado?.unidade} para esta preparação.
-                </p>
-              </div>
-            )}
-
-            {/* Botão de retirada */}
-            {!retiradaFeita ? (
-              <button
-                onClick={handleRegistrarRetirada}
-                disabled={estoqueInsuficiente || (estoqueProduto?.quantidadeAtual === 0)}
-                className={clsx(
-                  "w-full flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]",
-                  estoqueInsuficiente || (estoqueProduto?.quantidadeAtual === 0)
-                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                    : "bg-brand-600 hover:bg-brand-700 text-white shadow-sm hover:shadow"
-                )}
-              >
-                <PackageMinus className="w-4.5 h-4.5" />
-                Registrar Retirada de Estoque
-              </button>
-            ) : (
-              <div className="flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                <Check className="w-4.5 h-4.5 text-emerald-600" />
-                <span className="text-sm font-semibold text-emerald-700">
-                  Retirada registrada com sucesso!
-                </span>
-              </div>
-            )}
-
-            {/* Saldo após retirada */}
-            {retiradaFeita && estoqueProduto && (
-              <p className="text-xs text-gray-500 mt-2 text-center">
-                Novo saldo: <span className="font-semibold">{estoqueProduto.quantidadeAtual} {produtoSelecionado?.unidade}</span>
-                {getStatusEstoque(estoqueProduto) !== "ok" && (
-                  <span className={clsx(
-                    "ml-2 font-semibold",
-                    getStatusEstoque(estoqueProduto) === "baixo" && "text-amber-600",
-                    getStatusEstoque(estoqueProduto) === "critico" && "text-orange-600",
-                    getStatusEstoque(estoqueProduto) === "zerado" && "text-red-600",
-                  )}>
-                    — Atenção: estoque {getStatusEstoque(estoqueProduto) === "zerado" ? "zerado" : "abaixo do mínimo"}!
-                  </span>
-                )}
-              </p>
-            )}
-          </div>
         </section>
       )}
 
@@ -717,5 +627,13 @@ export default function DiluicoesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function DiluicoesPage() {
+  return (
+    <Suspense fallback={<div className="flex p-8 justify-center text-gray-400">Carregando calculadora...</div>}>
+      <DiluicoesCalculator />
+    </Suspense>
   );
 }

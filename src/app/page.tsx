@@ -81,12 +81,12 @@ export default function DashboardPage() {
   // ── Dados compostos ──
   const produtosCompletos = useMemo(() =>
     produtos.map((p) => {
-      const estoque = estoques.find((e) => e.produtoId === p.id)!;
+      const estoque = estoques.find((e) => e.produtoId === p.id);
       const pDils   = diluicoes.filter((d) => d.produtoId === p.id);
       const pCompras = compras
         .filter((c) => c.produtoId === p.id)
         .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
-      return { ...p, estoque, diluicoes: pDils, ultimaCompra: pCompras[0] };
+      return { ...p, estoque: estoque ?? null, diluicoes: pDils, ultimaCompra: pCompras[0] ?? null };
     }),
     [produtos, estoques, compras, diluicoes]
   );
@@ -204,7 +204,7 @@ export default function DashboardPage() {
               </p>
             ) : (
               alertas.map((produto) => {
-                const status = getStatusEstoque(produto.estoque);
+                const status = getStatusEstoque(produto.estoque!);
                 const cfg = statusConfig[status];
                 return (
                   <div key={produto.id} className="flex items-center justify-between px-6 py-4">
@@ -217,11 +217,11 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-4 shrink-0">
                       <div className="text-right">
                         <p className="text-sm font-semibold text-gray-900">
-                          {produto.estoque.quantidadeAtual}{" "}
+                          {produto.estoque?.quantidadeAtual ?? 0}{" "}
                           <span className="text-gray-400 font-normal">{produto.unidade}</span>
                         </p>
                         <p className="text-[11px] text-gray-400">
-                          mín: {produto.estoque.alertaEstoqueMinimo} {produto.unidade}
+                          mín: {produto.estoque?.alertaEstoqueMinimo ?? 0} {produto.unidade}
                         </p>
                       </div>
                       <span className={clsx("text-xs font-semibold px-2.5 py-1 rounded-full", cfg.cls)}>

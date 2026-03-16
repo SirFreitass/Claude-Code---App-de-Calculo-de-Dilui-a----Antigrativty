@@ -13,6 +13,9 @@ import {
   Package,
   ChevronDown,
   Filter,
+  Pencil,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useApp } from "@/contexts/AppContext";
@@ -22,6 +25,7 @@ import {
   type Compra,
 } from "@/types";
 import { NovaCompraModal } from "@/components/compras/NovaCompraModal";
+import { EditarCompraModal } from "@/components/compras/EditarCompraModal";
 
 // ─────────────────────────────────────────────
 // Tipos locais
@@ -36,7 +40,7 @@ type PeriodoFilter = "" | "mes-atual" | "mes-anterior" | "ultimos-3";
 // ─────────────────────────────────────────────
 
 export default function ComprasPage() {
-  const { produtos, compras } = useApp();
+  const { produtos, compras, estoques, deleteCompra } = useApp();
 
   const [search, setSearch] = useState("");
   const [filterProduto, setFilterProduto] = useState("");
@@ -45,6 +49,8 @@ export default function ComprasPage() {
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [modalOpen, setModalOpen] = useState(false);
   const [detalheCompraId, setDetalheCompraId] = useState<string | null>(null);
+  const [editarCompraId, setEditarCompraId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // ── Datas de referência ──
   const agora = new Date();
@@ -337,12 +343,15 @@ export default function ComprasPage() {
                 <th className="text-center px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   Tendência
                 </th>
+                <th className="px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Ações
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {comprasList.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={8}>
                     <div className="flex flex-col items-center justify-center py-16 gap-3">
                       <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-gray-100">
                         <ShoppingCart className="w-6 h-6 text-gray-400" />
@@ -437,6 +446,26 @@ export default function ComprasPage() {
                           tendencia={compra.tendencia}
                           variacao={compra.variacaoPercent}
                         />
+                      </div>
+                    </td>
+
+                    {/* Ações */}
+                    <td className="px-5 py-4">
+                      <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setEditarCompraId(compra.id); }}
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 bg-white hover:border-brand-300 hover:text-brand-600 transition shadow-sm"
+                          title="Editar compra"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(compra.id); }}
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-200 text-gray-500 bg-white hover:border-red-300 hover:text-red-600 transition shadow-sm"
+                          title="Excluir compra"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -540,8 +569,64 @@ export default function ComprasPage() {
         </div>
       )}
 
-      {/* Modal */}
+      {/* Confirmação de exclusão */}
+      {confirmDeleteId && (() => {
+        const cDel = compras.find(c => c.id === confirmDeleteId);
+        const pDel = cDel ? produtos.find(p => p.id === cDel.produtoId) : null;
+        const eDel = cDel ? estoques.find(e => e.produtoId === cDel.produtoId) : null;
+        const saldoApos = eDel && cDel ? +(eDel.quantidadeAtual - cDel.quantidade).toFixed(4) : 0;
+        const bloqueado = saldoApos < 0;
+        return (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setConfirmDeleteId(null)}>
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 animate-slide-up-fade" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100">
+                  <Trash2 className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Excluir Compra</h3>
+                  <p className="text-xs text-gray-500">{pDel?.nome} — {cDel ? new Date(cDel.data).toLocaleDateString("pt-BR") : ""}</p>
+                </div>
+              </div>
+
+              <div className={clsx("rounded-xl border p-4 mb-4", bloqueado ? "bg-red-50 border-red-200" : "bg-amber-50 border-amber-200")}>
+                <p className="text-sm text-gray-700 mb-2">
+                  Esta ação vai <strong>subtrair {cDel?.quantidade} {pDel?.unidade}</strong> do estoque.
+                </p>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-600">Saldo atual: <strong>{eDel?.quantidadeAtual} {pDel?.unidade}</strong></span>
+                  <span className="text-gray-400">→</span>
+                  <span className={clsx("font-bold", bloqueado ? "text-red-600" : "text-amber-700")}>{saldoApos} {pDel?.unidade}</span>
+                </div>
+                {bloqueado && (
+                  <div className="flex items-center gap-1.5 mt-2 text-xs text-red-600 font-semibold">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Exclusão bloqueada — estoque ficaria negativo!
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button onClick={() => setConfirmDeleteId(null)} className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 bg-white border border-gray-200 hover:bg-gray-50 transition">
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => { deleteCompra({ id: confirmDeleteId }); setConfirmDeleteId(null); setDetalheCompraId(null); }}
+                  disabled={bloqueado}
+                  className={clsx("px-5 py-2 rounded-xl text-sm font-semibold text-white transition flex items-center gap-2", bloqueado ? "bg-gray-300 cursor-not-allowed" : "bg-red-600 hover:bg-red-700")}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Confirmar Exclusão
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Modais */}
       <NovaCompraModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <EditarCompraModal compraId={editarCompraId} open={!!editarCompraId} onClose={() => setEditarCompraId(null)} />
     </div>
   );
 }

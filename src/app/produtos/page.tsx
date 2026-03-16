@@ -8,13 +8,18 @@ import {
   FlaskConical,
   AlertTriangle,
   Eye,
+  Pencil,
+  Trash2,
   X,
+  QrCode,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useApp } from "@/contexts/AppContext";
 import { getStatusEstoque, precoMedioPonderado, type StatusEstoque, type Categoria } from "@/types";
 import { NovoProdutoModal } from "@/components/produtos/NovoProdutoModal";
+import { EditarProdutoModal } from "@/components/produtos/EditarProdutoModal";
 import { DetalhesProdutoModal } from "@/components/produtos/DetalhesProdutoModal";
+import { GerarEtiquetaModal } from "@/components/produtos/GerarEtiquetaModal";
 
 // ─────────────────────────────────────────────
 // Config de status
@@ -39,14 +44,16 @@ type SortDir = "asc" | "desc";
 // ─────────────────────────────────────────────
 
 export default function ProdutosPage() {
-  const { produtos, estoques, compras, diluicoes, categorias: categoriasContexto } = useApp();
+  const { produtos, estoques, compras, diluicoes, categorias: categoriasContexto, deleteProduto } = useApp();
 
   const [search, setSearch]         = useState("");
   const [filterCat, setFilterCat]   = useState<Categoria | "">("");
   const [sortField, setSortField]   = useState<SortField>("nome");
-  const [sortDir, setSortDir]       = useState<SortDir>("asc");
+  const [sortDir,   setSortDir]     = useState<SortDir>("asc");
   const [modalOpen, setModalOpen]   = useState(false);
   const [detalhesId, setDetalhesId] = useState<string | null>(null);
+  const [editarId,   setEditarId]   = useState<string | null>(null);
+  const [qrState,    setQrState]    = useState<{ id: string, nome: string } | null>(null);
 
   // ── Lista enriquecida + filtros + ordenação ──
   const produtosList = useMemo(() => {
@@ -93,6 +100,12 @@ export default function ProdutosPage() {
   function SortIcon({ field }: { field: SortField }) {
     if (sortField !== field) return <span className="text-gray-300 ml-1">↕</span>;
     return <span className="text-brand-500 ml-1">{sortDir === "asc" ? "↑" : "↓"}</span>;
+  }
+
+  function handleDelete(id: string, nome: string) {
+    if (window.confirm(`Tem certeza que deseja excluir o produto "${nome}"?\n\nEsta ação removerá também o seu estoque histórico e diluições associadas. A ação é permanente.`)) {
+      deleteProduto(id);
+    }
   }
 
   // ── Resumo de alertas ──
@@ -325,13 +338,36 @@ export default function ProdutosPage() {
 
                     {/* Ações */}
                     <td className="px-5 py-4">
-                      <button 
-                        onClick={() => setDetalhesId(produto.id)}
-                        className="flex items-center gap-1 text-xs text-gray-400 hover:text-brand-600 opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                        <Eye className="w-3.5 h-3.5" />
-                        Ver
-                      </button>
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => setEditarId(produto.id)}
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-200 text-gray-400 bg-white hover:border-brand-300 hover:text-brand-600 opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          Editar
+                        </button>
+                        <button 
+                          onClick={() => setDetalhesId(produto.id)}
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-gray-200 text-gray-400 bg-white hover:border-gray-300 hover:text-gray-700 opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          Ver
+                        </button>
+                        <button 
+                          onClick={() => setQrState({ id: produto.id, nome: produto.nome })}
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-brand-100 text-brand-500 bg-white hover:border-brand-300 hover:text-brand-600 opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                          Etiqueta
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(produto.id, produto.nome)}
+                          className="flex items-center gap-1 text-xs px-2 py-1 rounded border border-red-100 text-red-400 bg-white hover:border-red-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all shadow-sm"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Excluir
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -352,10 +388,25 @@ export default function ProdutosPage() {
 
       {/* Modais */}
       <NovoProdutoModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <EditarProdutoModal 
+        produtoId={editarId}
+        open={!!editarId}
+        onClose={() => setEditarId(null)}
+      />
       <DetalhesProdutoModal 
         produtoId={detalhesId} 
         open={!!detalhesId} 
-        onClose={() => setDetalhesId(null)} 
+        onClose={() => setDetalhesId(null)}
+        onRequestEdit={() => {
+          setDetalhesId(null);
+          setEditarId(detalhesId);
+        }} 
+      />
+      <GerarEtiquetaModal
+        produtoId={qrState?.id ?? null}
+        produtoNome={qrState?.nome ?? null}
+        open={!!qrState}
+        onClose={() => setQrState(null)}
       />
     </div>
   );

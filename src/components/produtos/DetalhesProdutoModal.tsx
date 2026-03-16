@@ -27,12 +27,14 @@ interface DetalhesProdutoModalProps {
   produtoId: string | null;
   open: boolean;
   onClose: () => void;
+  onRequestEdit?: () => void;
 }
 
 export function DetalhesProdutoModal({
   produtoId,
   open,
   onClose,
+  onRequestEdit,
 }: DetalhesProdutoModalProps) {
   const { produtos, estoques, compras, diluicoes } = useApp();
 
@@ -135,13 +137,15 @@ export function DetalhesProdutoModal({
             </div>
             {/* Actions no topo */}
             <div className="flex justify-end mt-4">
+            {onRequestEdit && (
               <button
-                onClick={() => alert("Edição completa de produtos chegando em breve!")}
-                className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-brand-50 text-brand-700 text-sm font-semibold rounded-xl transition border border-brand-200 shadow-sm"
+                onClick={onRequestEdit}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-brand-700 bg-brand-100 hover:bg-brand-200 transition"
               >
-                <Pencil className="w-4 h-4" />
+                <Pencil className="w-3.5 h-3.5" />
                 Editar Produto
               </button>
+            )}
             </div>
           </div>
 
