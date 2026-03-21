@@ -2,6 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────
+   Design Tokens (CSS Custom Properties)
+   Preparação para theming e dark mode futuro
+   ───────────────────────────────────────────── */
+:root {
+  /* Brand */
+  --color-brand-500: 20 184 166;
+  --color-brand-600: 13 148 136;
+
+  /* Surface */
+  --surface-page: #f9fafb;
+  --surface-card: #ffffff;
+  --surface-elevated: #ffffff;
+
+  /* Radius */
+  --radius-card: 1rem;
+  --radius-button: 0.75rem;
+  --radius-input: 0.75rem;
+  --radius-badge: 9999px;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+}
+
 html,
 body {
   height: 100%;
